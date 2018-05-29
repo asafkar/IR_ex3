@@ -9,7 +9,7 @@ import java.io.IOException;
 import org.apache.lucene.document.Document;
 
 public class functions {
-
+ 
 	
 	public static void get_query() throws IOException {
 		File dir = new File(".");
@@ -34,12 +34,7 @@ public class functions {
 		br.close();
 	} //get query
 	
-	public static void read_documents() {
-		  Document doc = new Document();
-		  doc.add(new TextField("title", title, Field.Store.YES));
-		  doc.add(new StringField("isbn", isbn, Field.Store.YES));
-		  w.addDocument(doc);
-		  
-	}
+
+	
 	
 }
