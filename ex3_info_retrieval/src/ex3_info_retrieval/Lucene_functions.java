@@ -4,15 +4,21 @@ import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileReader;
 import java.io.IOException;
+import java.util.Comparator;
 
 import org.apache.lucene.document.Document;
 import org.apache.lucene.document.StringField;
 import org.apache.lucene.document.TextField;
 import org.apache.lucene.index.DirectoryReader;
+import org.apache.lucene.index.Fields;
 import org.apache.lucene.index.IndexReader;
 import org.apache.lucene.index.IndexWriter;
 import org.apache.lucene.index.IndexWriterConfig;
+import org.apache.lucene.index.MultiFields;
+import org.apache.lucene.index.Term;
+import org.apache.lucene.index.Terms;
 import org.apache.lucene.index.TermsEnum;
+import org.apache.lucene.misc.HighFreqTerms; /// add external jar lucene misc
 import org.apache.lucene.search.IndexSearcher;
 import org.apache.lucene.search.Query;
 import org.apache.lucene.search.TopDocs;
@@ -22,6 +28,8 @@ import org.apache.lucene.store.Directory;
 import org.apache.lucene.store.RAMDirectory;
 import org.apache.lucene.document.Field;
 import org.apache.lucene.analysis.standard.StandardAnalyzer; //make sure you import into build_path the jar lucene\analysis\common\ jar file
+import org.apache.lucene.analysis.util.CharArraySet;
+import org.apache.lucene.codecs.TermStats;
 
 public class Lucene_functions {
 
@@ -41,19 +49,15 @@ public class Lucene_functions {
 	}
 	
 	
-	public static void analyze_most_frequent_terms() throws IOException {
+	public static void analyze_most_frequent_terms() throws Exception {
 		IndexReader reader = DirectoryReader.open(index_dir);
         IndexSearcher searcher = new IndexSearcher(reader);
-//        TopDocs docs = searcher.search(q, hitsPerPage);
-       
-//        TermsEnum terms = reader.getTermVector(0, field);
-//        Set<String> uniqueTerms = new HashSet<String>();
-//        while (terms.next()) {
-//                final Term term = terms.term();
-//                if (term.field().equals("field_name")) {
-//                        uniqueTerms.add(term.text());
-//                }
-//        }        
+
+        org.apache.lucene.misc.TermStats[] commonTerms = HighFreqTerms.getHighFreqTerms(reader, 20, "content", new HighFreqTerms.DocFreqComparator());
+        for (org.apache.lucene.misc.TermStats commonTerm : commonTerms) {
+            System.out.println(commonTerm.termtext.utf8ToString()); 
+        } 
+           
 	}
 	
 	
@@ -91,7 +95,9 @@ public class Lucene_functions {
 				}
 			}
 			addDoc(w, doc_title, current_content);
+			System.out.println("doc title:");
 			System.out.println(doc_title);
+			System.out.println("doc content:");
 			System.out.println(current_content);
 		} // read whole documents file
 
