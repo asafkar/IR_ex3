@@ -4,51 +4,37 @@ import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileReader;
 import java.io.IOException;
-import java.nio.file.Paths;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Comparator;
-import java.util.List;
 
 import org.apache.lucene.document.Document;
 import org.apache.lucene.document.StringField;
 import org.apache.lucene.document.TextField;
 import org.apache.lucene.index.DirectoryReader;
-import org.apache.lucene.index.Fields;
 import org.apache.lucene.index.IndexReader;
 import org.apache.lucene.index.IndexWriter;
 import org.apache.lucene.index.IndexWriterConfig;
-import org.apache.lucene.index.LeafReader;
-import org.apache.lucene.index.LeafReaderContext;
-import org.apache.lucene.index.MultiFields;
-import org.apache.lucene.index.PostingsEnum;
-import org.apache.lucene.index.Term;
-import org.apache.lucene.index.Terms;
-import org.apache.lucene.index.TermsEnum;
 import org.apache.lucene.misc.HighFreqTerms; /// add external jar lucene misc
 import org.apache.lucene.search.IndexSearcher;
 import org.apache.lucene.search.Query;
-import org.apache.lucene.search.TopDocs;
+import org.apache.lucene.search.ScoreDoc;
+import org.apache.lucene.search.TopScoreDocCollector;
 import org.apache.lucene.queryparser.classic.ParseException;
 import org.apache.lucene.queryparser.classic.QueryParser; // import lucene-queries and query_parser jars
 import org.apache.lucene.store.Directory;
-import org.apache.lucene.store.FSDirectory;
+import org.apache.lucene.store.FSDirectory;  // TODO - decide if we want RAMDirectory, or FSDirectory 
 import org.apache.lucene.store.RAMDirectory;
-import org.apache.lucene.util.BytesRef;
 import org.apache.lucene.document.Field;
 import org.apache.lucene.analysis.standard.StandardAnalyzer; //make sure you import into build_path the jar lucene\analysis\common\ jar file
-import org.apache.lucene.analysis.util.CharArraySet;
-import org.apache.lucene.codecs.TermStats;
 
 public class Lucene_functions {
 
 	static StandardAnalyzer analyzer = new StandardAnalyzer();
 	static Directory index_dir = new RAMDirectory();
 
-	public static void addDoc(IndexWriter w, String title, String content) throws IOException {
+	public static void addDoc(IndexWriter w, String title, String content, String doc_num) throws IOException {
 		Document doc = new Document();
 		doc.add(new StringField("title", title, Field.Store.YES)); // stringfiled isn't tokenized
 		doc.add(new TextField("content", content, Field.Store.YES)); // textfield is tokenized
+		doc.add(new StringField("doc_id",doc_num , Field.Store.YES));
 		w.addDocument(doc);
 	}
 
@@ -56,7 +42,6 @@ public class Lucene_functions {
 	// get the 20 most frequent words in the collection
 	public static void analyze_most_frequent_terms() throws Exception {
 		IndexReader reader = DirectoryReader.open(index_dir);
-
 	
         org.apache.lucene.misc.TermStats[] commonTerms = HighFreqTerms.getHighFreqTerms(reader, 20, "content", new HighFreqTerms.TotalTermFreqComparator());
         for (org.apache.lucene.misc.TermStats commonTerm : commonTerms) {
@@ -83,6 +68,7 @@ public class Lucene_functions {
 		String line = null;
 		String current_content = null;
 		String doc_title = null;
+		int doc_num = 1;
 
 		line = br.readLine();
 		while (line != null) { // read whole documents file
@@ -101,7 +87,8 @@ public class Lucene_functions {
 					break;
 				}
 			}
-			addDoc(w, doc_title, current_content);
+			addDoc(w, doc_title, current_content, Integer.toString(doc_num));
+			doc_num++;
 //			System.out.println("doc title:");
 //			System.out.println(doc_title);
 //			System.out.println("doc content:");
@@ -113,36 +100,27 @@ public class Lucene_functions {
 	}
 	
 	//for each of the query terms, fetch the inverted index list from the index 
-	public static void submit_query(String current_query) throws IOException {
-		
+	public static void submit_query(String current_query_str) throws IOException, ParseException {
 		//split the query to terms
-		List<String> query_terms = new ArrayList<String>();
-		query_terms = Arrays.asList(current_query.trim().replaceAll("[\\.\\,]","").split("\\s+")); //remove commas, dots and spaces, and split
-//		System.out.println(query_terms);
+//		List<String> query_terms = new ArrayList<String>();
+//		query_terms = Arrays.asList(current_query_str.trim().replaceAll("[\\.\\,]","").split("\\s+")); //remove commas, dots and spaces, and split
         IndexReader reader = DirectoryReader.open(index_dir);
+        IndexSearcher searcher = new IndexSearcher(reader);
+        Query currentQuery = new QueryParser("content", analyzer).parse(QueryParser.escape(current_query_str));
         
+        TopScoreDocCollector inputCollector = TopScoreDocCollector.create(10);
+        searcher.search(currentQuery, inputCollector);
+        ScoreDoc[] hits = inputCollector.topDocs().scoreDocs;
         
-        
-        // read this : https://www.tutorialspoint.com/lucene/lucene_analysis.htm and pages around it
-        
-        //some example i found, not sure it's relevant
-//        Terms terms = MultiFields.getTerms(reader, "content");
-//        final TermsEnum it = terms.iterator();
-//        BytesRef term = it.next();
-//        while (term != null) {
-//            String termString = term.utf8ToString();
-//            System.out.print(termString + ": ");
-//            for (LeafReaderContext lrc : reader.leaves()) {
-//                LeafReader lr = lrc.reader();
-//                PostingsEnum pe = lr.postings(new Term("content", termString));
-//                int docId = pe.nextDoc();
-//                while (docId != PostingsEnum.NO_MORE_DOCS) {
-//                    Document doc = lr.document(docId);
-//                    System.out.println(doc);
-//                    docId = pe.nextDoc();
-//                }
-//            }
-//            term = it.next();
-//        }
+        System.out.println("current query:" + current_query_str);
+        if (hits.length > 0) {
+//            int docId = hits[0].doc;
+//            Document doc = searcher.doc(docId);
+//            System.out.println(doc.get("content"));
+        	System.out.println("list of hits for the query:");
+        	for (ScoreDoc hit : hits) {
+        		System.out.print(hit.doc + " ");
+        	}
+        }
 	}
 }

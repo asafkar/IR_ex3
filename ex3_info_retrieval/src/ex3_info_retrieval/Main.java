@@ -6,8 +6,6 @@ import ex3_info_retrieval.Lucene_functions;
 import java.util.ArrayList;
 import java.util.List;
 
-import org.apache.lucene.*;
-
 
 public class Main {
 	public static List<String> stop_words_list = new ArrayList<String>();
@@ -19,10 +17,11 @@ public class Main {
         Lucene_functions.read_documents(); //read collection, 
         Lucene_functions.analyze_most_frequent_terms(); //find top 20 words that appear in it
         
-        //fetch the inverted list for each query
+        //fetch the inverted list for each query, and return a list of the 10 highest matching documents for each query
         for (String query : queries_list) {
 //        	System.out.println(query);
         	Lucene_functions.submit_query(query);
+        	break; //FIXME 
         }
         
 
