@@ -1,9 +1,13 @@
 package ex3_info_retrieval;
 
 import java.io.BufferedReader;
+import java.io.BufferedWriter;
 import java.io.File;
 import java.io.FileReader;
+import java.io.FileWriter;
 import java.io.IOException;
+import java.io.PrintWriter;
+import java.util.Iterator;
 
 import org.apache.lucene.document.Document;
 import org.apache.lucene.document.StringField;
@@ -17,25 +21,42 @@ import org.apache.lucene.search.IndexSearcher;
 import org.apache.lucene.search.Query;
 import org.apache.lucene.search.ScoreDoc;
 import org.apache.lucene.search.TopScoreDocCollector;
+import org.apache.lucene.search.similarities.ClassicSimilarity;
+import org.apache.lucene.search.similarities.TFIDFSimilarity;
 import org.apache.lucene.queryparser.classic.ParseException;
 import org.apache.lucene.queryparser.classic.QueryParser; // import lucene-queries and query_parser jars
 import org.apache.lucene.store.Directory;
 import org.apache.lucene.store.FSDirectory;  // TODO - decide if we want RAMDirectory, or FSDirectory 
 import org.apache.lucene.store.RAMDirectory;
 import org.apache.lucene.document.Field;
+import org.apache.lucene.analysis.Analyzer;
+import org.apache.lucene.analysis.core.StopAnalyzer;
+import org.apache.lucene.analysis.core.StopFilter;
+import org.apache.lucene.analysis.en.EnglishAnalyzer;
 import org.apache.lucene.analysis.standard.StandardAnalyzer; //make sure you import into build_path the jar lucene\analysis\common\ jar file
 
 public class Lucene_functions {
 
-	static StandardAnalyzer analyzer = new StandardAnalyzer();
+	
+	
+	// choosing between these two gives different results - check why!!
+	//fixme - for some reason - changing stopwords list from 20 doesn't make a difference - why?
+	static StandardAnalyzer analyzer = new StandardAnalyzer(StopFilter.makeStopSet((Main.stop_words_list))); //converts tokens to lowercase, and removes stop_words
+//	static Analyzer analyzer = new StopAnalyzer(EnglishAnalyzer.getDefaultStopSet()); //converts tokens to lowercase, and removes stop_words
+//	static Analyzer analyzer = new StopAnalyzer(StopFilter.makeStopSet((Main.stop_words_list))); //converts tokens to lowercase, and removes stop_words
+
+	
 	static Directory index_dir = new RAMDirectory();
+	
 
 	public static void addDoc(IndexWriter w, String title, String content, String doc_num) throws IOException {
 		Document doc = new Document();
+
 		doc.add(new StringField("title", title, Field.Store.YES)); // stringfiled isn't tokenized
 		doc.add(new TextField("content", content, Field.Store.YES)); // textfield is tokenized
 		doc.add(new StringField("doc_id",doc_num , Field.Store.YES));
 		w.addDocument(doc);
+		
 	}
 
 	
@@ -48,6 +69,13 @@ public class Lucene_functions {
 //            System.out.println(commonTerm.termtext.utf8ToString()); 
             Main.stop_words_list.add(commonTerm.termtext.utf8ToString());
         } 
+        if (Config.improved_algo) { // add the default english stop words to our stop word list
+        	Iterator iter = EnglishAnalyzer.getDefaultStopSet().iterator();
+        	while(iter.hasNext()) {
+        	    char[] stopWord = (char[]) iter.next();
+        	    Main.stop_words_list.add(new String (stopWord));
+        	}
+        }
         reader.close();
            
 	} //analyze_most_frequent_terms
@@ -61,7 +89,7 @@ public class Lucene_functions {
 		IndexWriter w = new IndexWriter(index_dir, config);
 
 		File dir = new File(".");
-		File document_file = new File(dir.getCanonicalPath() + File.separator + "/Files/docs.txt");
+		File document_file = new File(dir.getCanonicalPath() + File.separator + Config.docsFile);
 
 		BufferedReader br = new BufferedReader(new FileReader(document_file));
 
@@ -106,21 +134,73 @@ public class Lucene_functions {
 //		query_terms = Arrays.asList(current_query_str.trim().replaceAll("[\\.\\,]","").split("\\s+")); //remove commas, dots and spaces, and split
         IndexReader reader = DirectoryReader.open(index_dir);
         IndexSearcher searcher = new IndexSearcher(reader);
+        
+        
+    	File dir = new File(".");
+		File result_file = new File(dir.getCanonicalPath() + File.separator + Config.outputFile);
+		result_file.getParentFile().mkdirs(); //creates the dir if doesn't exist
+
+    	FileWriter  fw = new FileWriter(result_file.getAbsolutePath(), true);
+    	BufferedWriter   bw = new BufferedWriter(fw);
+    	PrintWriter    out = new PrintWriter(bw);
+        
+        
+        
+        TFIDFSimilarity similarity = new ClassicSimilarity() 
+        {
+        	@Override
+        	public float tf(float freq) {
+        		return (float) (1 + Math.log(freq));
+        	}
+        	@Override
+        	public float idf(long docFreq, long numDocs) {
+        		if (docFreq == 0) return 0;
+        		return (float) (Math.log(numDocs / docFreq));
+        	}
+        	@Override
+        	public String toString() {
+        		return "tf-idf similarity";
+        	}
+        };
+        searcher.setSimilarity(similarity);
+        
+        
+
         Query currentQuery = new QueryParser("content", analyzer).parse(QueryParser.escape(current_query_str));
         
         TopScoreDocCollector inputCollector = TopScoreDocCollector.create(10);
+        
         searcher.search(currentQuery, inputCollector);
         ScoreDoc[] hits = inputCollector.topDocs().scoreDocs;
         
-        System.out.println("current query:" + current_query_str);
+        System.out.println("current query:" + current_query_str + "  -> results  : ");
         if (hits.length > 0) {
-//            int docId = hits[0].doc;
-//            Document doc = searcher.doc(docId);
-//            System.out.println(doc.get("content"));
-        	System.out.println("list of hits for the query:");
+//                int docId = hits[0].doc;
+//                Document doc = searcher.doc(docId);
+//                System.out.println(doc.get("content"));
+//            	System.out.println("list of hits for the query:");
+        	
+        	out.print(Config.running_output_query_index + "   ");
         	for (ScoreDoc hit : hits) {
-        		System.out.print(hit.doc + " ");
+        		System.out.print((hit.doc+1) + " "); //fix result offset by 1
+        	    out.print((hit.doc+1) + " ");
+
         	}
-        }
+        	out.println("");
+        	Config.running_output_query_index++;
+        	//fixme:
+        	Document temp_doc =   reader.document(0);
+//            	System.out.println(temp_doc.getField("content").stringValue());
+        	
+        	System.out.println("");
+        }       	
+    
+
+   	    out.close();
+	    fw.close();
+	    bw.close();
+        
 	}
 }
+
+
